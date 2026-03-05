@@ -92,15 +92,14 @@ class SemanticCache:
             return await fn(*args, **kwargs)
 
         try:
-            context_hash = hash_context(cache_context)
             prompt_text = self._extract_prompt(kwargs.get("messages", []))
+            if prompt_text is None:
+                log.info("cache.no_user_message_bypass", namespace=namespace)
+                return await fn(*args, **kwargs)
+            context_hash = hash_context(cache_context)
         except Exception as exc:
             record_cache_error("params")
             log.error("cache.params_failed", error=str(exc))
-            return await fn(*args, **kwargs)
-
-        if prompt_text is None:
-            log.info("cache.no_user_message_bypass", namespace=namespace)
             return await fn(*args, **kwargs)
 
         embedding, cached = await self._async_lookup(prompt_text, namespace, context_hash)
@@ -140,15 +139,14 @@ class SemanticCache:
             return fn(*args, **kwargs)
 
         try:
-            context_hash = hash_context(cache_context)
             prompt_text = self._extract_prompt(kwargs.get("messages", []))
+            if prompt_text is None:
+                log.info("cache.no_user_message_bypass", namespace=namespace)
+                return fn(*args, **kwargs)
+            context_hash = hash_context(cache_context)
         except Exception as exc:
             record_cache_error("params")
             log.error("cache.params_failed", error=str(exc))
-            return fn(*args, **kwargs)
-
-        if prompt_text is None:
-            log.info("cache.no_user_message_bypass", namespace=namespace)
             return fn(*args, **kwargs)
 
         embedding, cached = self._sync_lookup(prompt_text, namespace, context_hash)
