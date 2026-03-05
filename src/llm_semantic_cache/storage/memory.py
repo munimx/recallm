@@ -92,3 +92,29 @@ class InMemoryStorage(StorageBackend):
     def namespace_size(self, namespace: str) -> int:
         """Return the count of live (non-expired) entries in a namespace."""
         return sum(1 for e in self._store.get(namespace, []) if not e.is_expired())
+
+    # Async overrides — call sync methods directly without thread pool.
+    # InMemoryStorage operations are instant dict/list operations;
+    # running them through asyncio.to_thread() adds unnecessary overhead.
+
+    async def astore(self, entry: CacheEntry) -> None:
+        self.store(entry)
+
+    async def asearch(
+        self,
+        embedding: list[float],
+        namespace: str,
+        embedding_model_id: str,
+        context_hash: str,
+        threshold: float,
+    ) -> CacheEntry | None:
+        return self.search(embedding, namespace, embedding_model_id, context_hash, threshold)
+
+    async def ainvalidate_namespace(self, namespace: str) -> int:
+        return self.invalidate_namespace(namespace)
+
+    async def aclear(self) -> None:
+        self.clear()
+
+    async def anamespace_size(self, namespace: str) -> int:
+        return self.namespace_size(namespace)
