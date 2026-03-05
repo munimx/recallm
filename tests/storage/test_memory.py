@@ -42,7 +42,7 @@ def test_search_returns_none_below_threshold(memory_storage: InMemoryStorage) ->
 
 
 def test_search_returns_best_match_above_threshold(memory_storage: InMemoryStorage) -> None:
-    weaker = make_entry(embedding=[1.0, 1.0, 0.0], prompt_text="weaker")
+    weaker = make_entry(embedding=[0.70710678, 0.70710678, 0.0], prompt_text="weaker")
     stronger = make_entry(embedding=[1.0, 0.0, 0.0], prompt_text="stronger")
     memory_storage.store(weaker)
     memory_storage.store(stronger)
@@ -58,6 +58,14 @@ def test_search_ignores_expired_entries(memory_storage: InMemoryStorage) -> None
     time.sleep(0.02)
     result = memory_storage.search([1.0, 0.0, 0.0], "test", "test-model", "abc123", 0.9)
     assert result is None
+
+
+def test_search_evicts_expired_entries_from_store(memory_storage: InMemoryStorage) -> None:
+    expired = make_entry(embedding=[1.0, 0.0, 0.0], ttl=0.001)
+    memory_storage.store(expired)
+    time.sleep(0.01)
+    memory_storage.search([1.0, 0.0, 0.0], "test", "test-model", "abc123", 0.9)
+    assert memory_storage.namespace_size("test") == 0
 
 
 def test_invalidate_namespace_removes_all_entries(memory_storage: InMemoryStorage) -> None:
