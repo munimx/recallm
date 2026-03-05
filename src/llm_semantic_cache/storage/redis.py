@@ -187,13 +187,19 @@ class RedisStorage(StorageBackend):
         if not entry_ids:
             return None
 
+        decoded_ids = [
+            raw_id.decode() if isinstance(raw_id, bytes) else raw_id for raw_id in entry_ids
+        ]
+        pipe = self._client.pipeline()
+        for entry_id in decoded_ids:
+            pipe.hgetall(_entry_key(entry_id))
+        results = await pipe.execute()
+
         best_entry: CacheEntry | None = None
         best_score = -1.0
         dead_ids: list[str] = []
 
-        for raw_id in entry_ids:
-            entry_id = raw_id.decode() if isinstance(raw_id, bytes) else raw_id
-            data = await self._client.hgetall(_entry_key(entry_id))
+        for entry_id, data in zip(decoded_ids, results):
             if not data:
                 dead_ids.append(entry_id)
                 continue
