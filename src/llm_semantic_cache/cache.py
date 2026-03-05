@@ -90,14 +90,20 @@ class SemanticCache:
             log.info("cache.no_user_message_bypass", namespace=namespace)
             return await fn(*args, **kwargs)
 
-        cached = await self._async_lookup(prompt_text, namespace, context_hash)
+        embedding, cached = await self._async_lookup(prompt_text, namespace, context_hash)
         if cached is not None:
             record_hit(namespace)
             log.info("cache.hit", namespace=namespace)
             return cached
 
         response = await fn(*args, **kwargs)
-        await self._async_store(prompt_text, context_hash, namespace, response)
+        await self._async_store(
+            prompt_text,
+            embedding,
+            context_hash,
+            namespace,
+            response,
+        )
 
         record_miss(namespace)
         log.info("cache.miss", namespace=namespace)
@@ -118,14 +124,20 @@ class SemanticCache:
             log.info("cache.no_user_message_bypass", namespace=namespace)
             return fn(*args, **kwargs)
 
-        cached = self._sync_lookup(prompt_text, namespace, context_hash)
+        embedding, cached = self._sync_lookup(prompt_text, namespace, context_hash)
         if cached is not None:
             record_hit(namespace)
             log.info("cache.hit", namespace=namespace)
             return cached
 
         response = fn(*args, **kwargs)
-        self._sync_store(prompt_text, context_hash, namespace, response)
+        self._sync_store(
+            prompt_text,
+            embedding,
+            context_hash,
+            namespace,
+            response,
+        )
 
         record_miss(namespace)
         log.info("cache.miss", namespace=namespace)
@@ -133,11 +145,16 @@ class SemanticCache:
 
     async def _async_lookup(
         self, prompt_text: str, namespace: str, context_hash: str
-    ) -> Any | None:
+    ) -> tuple[list[float], Any | None]:
         """Attempt cache lookup with timeout and fail-open on error."""
         try:
             with measure_embedding_latency():
                 embedding = self._embedder.embed(prompt_text)
+        except Exception as exc:
+            record_cache_error("lookup")
+            log.error("cache.lookup_failed", error=str(exc))
+            return [], None
+        try:
             result = await asyncio.wait_for(
                 self._storage.asearch(
                     embedding=embedding,
@@ -148,19 +165,24 @@ class SemanticCache:
                 ),
                 timeout=self._config.cache_timeout_seconds,
             )
-            return result.response if result is not None else None
+            return embedding, result.response if result is not None else None
         except Exception as exc:
             record_cache_error("lookup")
             log.error("cache.lookup_failed", error=str(exc))
-            return None
+            return embedding, None
 
     def _sync_lookup(
         self, prompt_text: str, namespace: str, context_hash: str
-    ) -> Any | None:
+    ) -> tuple[list[float], Any | None]:
         """Sync cache lookup with fail-open on error."""
         try:
             with measure_embedding_latency():
                 embedding = self._embedder.embed(prompt_text)
+        except Exception as exc:
+            record_cache_error("lookup")
+            log.error("cache.lookup_failed", error=str(exc))
+            return [], None
+        try:
             result = self._storage.search(
                 embedding=embedding,
                 namespace=namespace,
@@ -168,23 +190,22 @@ class SemanticCache:
                 context_hash=context_hash,
                 threshold=self._threshold,
             )
-            return result.response if result is not None else None
+            return embedding, result.response if result is not None else None
         except Exception as exc:
             record_cache_error("lookup")
             log.error("cache.lookup_failed", error=str(exc))
-            return None
+            return embedding, None
 
     async def _async_store(
         self,
         prompt_text: str,
+        embedding: list[float],
         context_hash: str,
         namespace: str,
         response: Any,
     ) -> None:
         """Attempt to store a response in the cache. Fail-open on error."""
         try:
-            with measure_embedding_latency():
-                embedding = self._embedder.embed(prompt_text)
             entry = self._build_entry(
                 prompt_text,
                 embedding,
@@ -203,14 +224,13 @@ class SemanticCache:
     def _sync_store(
         self,
         prompt_text: str,
+        embedding: list[float],
         context_hash: str,
         namespace: str,
         response: Any,
     ) -> None:
         """Sync store with fail-open on error."""
         try:
-            with measure_embedding_latency():
-                embedding = self._embedder.embed(prompt_text)
             entry = self._build_entry(
                 prompt_text,
                 embedding,
