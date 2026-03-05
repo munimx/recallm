@@ -303,10 +303,12 @@ class SemanticCache:
             response_dict = response
         elif hasattr(response, "model_dump"):
             response_dict = response.model_dump(mode="json")
-        elif hasattr(response, "__dict__"):
-            response_dict = vars(response)
         else:
-            response_dict = {"value": response}
+            raise TypeError(
+                f"Cannot serialize response of type {type(response).__name__!r}. "
+                "SemanticCache expects an OpenAI-compatible response (dict or Pydantic model). "
+                "For non-standard responses, convert to a dict before passing to the cached function."
+            )
 
         return CacheEntry(
             id=str(uuid.uuid4()),
