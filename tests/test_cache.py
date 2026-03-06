@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -403,3 +404,39 @@ def test_wrap_mode_async_forces_async_wrapper(fake_embedder: Any) -> None:
 
     wrapped = cache.wrap(create, mode="async")
     assert inspect.iscoroutinefunction(wrapped)
+
+
+def test_empty_embedding_not_stored() -> None:
+    class WarmupOnlyEmbedder:
+        @property
+        def model_id(self) -> str:
+            return "fake-model"
+
+        def embed(self, text: str) -> list[float]:
+            if text == "warmup":
+                return [1.0, 0.0]
+            raise RuntimeError("embed failed")
+
+    storage = MagicMock(spec=InMemoryStorage)
+    cache = SemanticCache(
+        storage=storage,
+        config=CacheConfig(threshold=0.85, cache_timeout_seconds=1.0),
+        embedder=WarmupOnlyEmbedder(),
+    )
+
+    def create(**_: Any) -> dict[str, Any]:
+        return RESPONSE
+
+    wrapped = cache.wrap(create)
+    response = wrapped(messages=MESSAGES, cache_context={})
+
+    assert response == RESPONSE
+    storage.store.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_async_warmup_does_not_block(fake_embedder: Any) -> None:
+    cache = make_cache(fake_embedder)
+
+    assert inspect.iscoroutinefunction(cache.async_warmup)
+    await cache.async_warmup()
