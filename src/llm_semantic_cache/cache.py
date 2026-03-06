@@ -43,6 +43,10 @@ class SemanticCache:
         # Warm up the embedding model eagerly to prevent cold-start cache bypass.
         # The lazy load on first use can take seconds; we absorb this cost at init time.
         self._embedder.embed("warmup")
+        # Note: This blocks the calling thread while the ONNX model loads (1–10s on
+        # first run). In async frameworks, use async_warmup() instead — construct
+        # SemanticCache before the event loop starts, or call
+        # await asyncio.to_thread(lambda: SemanticCache(...)) from async code.
 
     def wrap(
         self,
@@ -62,6 +66,19 @@ class SemanticCache:
     async def ainvalidate_namespace(self, namespace: str) -> int:
         """Async version of invalidate_namespace()."""
         return await self._storage.ainvalidate_namespace(namespace)
+
+    async def async_warmup(self) -> None:
+        """Warm up the embedding model without blocking the event loop.
+
+        Use this in async frameworks (FastAPI lifespan, etc.) instead of
+        relying on the blocking warmup in __init__:
+
+            @asynccontextmanager
+            async def lifespan(app):
+                await cache.async_warmup()
+                yield
+        """
+        await asyncio.to_thread(self._embedder.embed, "warmup")
 
     def _make_async_wrapper(self, fn: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(fn)
