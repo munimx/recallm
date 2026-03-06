@@ -28,8 +28,10 @@ def _canonical_default(obj: object) -> object:
         return sorted(str(item) for item in obj)
     if hasattr(obj, "model_dump"):  # Pydantic v2
         return obj.model_dump(mode="json")
-    if hasattr(obj, "dict"):  # Pydantic v1
-        return obj.dict()
+    if hasattr(obj, "dict") and hasattr(obj, "__fields__"):  # Pydantic v1
+        # obj.dict() returns Python-native types; recursively normalize for
+        # consistent serialization regardless of field types.
+        return {k: _canonical_default(v) for k, v in obj.dict().items()}
     raise TypeError(
         f"Context value of type {type(obj).__name__!r} is not serializable. "
         f"Convert it to a JSON-compatible type (str, int, float, bool, list, dict) "
