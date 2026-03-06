@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import threading
 from typing import Protocol, runtime_checkable
 
 
@@ -52,6 +53,7 @@ class FastEmbedEmbedder:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
         self._model_name = model_name
         self._model: object | None = None
+        self._lock = threading.Lock()
 
     @property
     def model_id(self) -> str:
@@ -73,7 +75,9 @@ class FastEmbedEmbedder:
     def embed(self, text: str) -> list[float]:
         """Embed text and return an L2-normalized vector."""
         if self._model is None:
-            self._model = self._load_model()
+            with self._lock:
+                if self._model is None:
+                    self._model = self._load_model()
         # fastembed returns a generator of numpy arrays
         result = list(self._model.embed([text]))[0]  # type: ignore[attr-defined]
         return _l2_normalize(result.tolist())
@@ -90,6 +94,7 @@ class SentenceTransformerEmbedder:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
         self._model_name = model_name
         self._model: object | None = None
+        self._lock = threading.Lock()
 
     @property
     def model_id(self) -> str:
@@ -108,6 +113,8 @@ class SentenceTransformerEmbedder:
     def embed(self, text: str) -> list[float]:
         """Embed text and return an L2-normalized vector."""
         if self._model is None:
-            self._model = self._load_model()
+            with self._lock:
+                if self._model is None:
+                    self._model = self._load_model()
         result = self._model.encode([text], normalize_embeddings=True)  # type: ignore[attr-defined]
         return result[0].tolist()
