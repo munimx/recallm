@@ -891,9 +891,9 @@
 <tbody>
 <tr>
 <td><code>threshold</code></td>
-<td><code>float</code></td>
-<td><code>0.92</code></td>
-<td>Minimum cosine similarity for a cache hit</td>
+<td><code>str \| float</code></td>
+<td><code>"balanced"</code></td>
+<td>Named profile (<code>"strict"</code>, <code>"balanced"</code>, <code>"loose"</code>) or raw cosine similarity in [0.0, 1.0]</td>
 </tr>
 <tr>
 <td><code>default_namespace</code></td>
@@ -906,6 +906,12 @@
 <td><code>float \| None</code></td>
 <td><code>None</code></td>
 <td>Time-to-live in seconds. None = no expiration</td>
+</tr>
+<tr>
+<td><code>embedding_model</code></td>
+<td><code>str</code></td>
+<td><code>"all-MiniLM-L6-v2"</code></td>
+<td>Embedding model identifier used for tagging cache entries. Must match the configured embedder's <code>model_id</code></td>
 </tr>
 <tr>
 <td><code>cache_timeout_seconds</code></td>
