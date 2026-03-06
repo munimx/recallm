@@ -4,7 +4,7 @@ All notable changes to Recallm will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.1.0] — YYYY-MM-DD
+## [0.1.0] — 2026-03-06
 
 ### Added
 - `SemanticCache.wrap()` with sync and async support

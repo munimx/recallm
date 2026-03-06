@@ -29,10 +29,6 @@ ruff check src/ tests/    # linting
 - For bug fixes, include a regression test that fails before your fix and passes after.
 - Keep PR scope tight: one problem, one focused solution.
 
-## Scope policy
-
-Features not in AGENTS.md §1 are out of scope and will be declined unless maintainers explicitly expand scope first.
-
 ## What makes a good PR
 
 A good PR is small, easy to review, and does one thing well. Prefer clear names, straightforward control flow, and explicit tests over broad refactors.
