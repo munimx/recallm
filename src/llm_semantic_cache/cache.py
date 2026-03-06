@@ -19,6 +19,7 @@ from llm_semantic_cache.metrics import (
     record_cache_error,
     record_hit,
     record_miss,
+    record_similarity_score,
     record_stream_bypass,
 )
 from llm_semantic_cache.prompt import extract_prompt_text
@@ -110,24 +111,42 @@ class SemanticCache:
 
         if kwargs.get("stream", False):
             record_stream_bypass()
-            log.info("cache.stream_bypass", namespace=namespace)
+            log.info(
+                "cache.stream_bypass",
+                namespace=namespace,
+                embedding_model=self._embedder.model_id,
+            )
             return await fn(*args, **kwargs)
 
         try:
             prompt_text = self._extract_prompt(kwargs.get("messages", []))
             if prompt_text is None:
-                log.info("cache.no_user_message_bypass", namespace=namespace)
+                log.info(
+                    "cache.no_user_message_bypass",
+                    namespace=namespace,
+                    embedding_model=self._embedder.model_id,
+                )
                 return await fn(*args, **kwargs)
             context_hash = hash_context(cache_context)
         except Exception as exc:
             record_cache_error("lookup")
-            log.error("cache.lookup_params_failed", error=str(exc))
+            log.error("cache.lookup_params_failed", error=str(exc), namespace=namespace)
             return await fn(*args, **kwargs)
 
-        embedding, cached = await self._async_lookup(prompt_text, namespace, context_hash)
+        embedding, cached, best_score = await self._async_lookup(
+            prompt_text, namespace, context_hash
+        )
+        if best_score is not None:
+            record_similarity_score(best_score)
         if cached is not None:
             record_hit(namespace)
-            log.info("cache.hit", namespace=namespace)
+            log.info(
+                "cache.hit",
+                namespace=namespace,
+                best_score=best_score,
+                threshold=self._threshold,
+                embedding_model=self._embedder.model_id,
+            )
             return cached
 
         response = await fn(*args, **kwargs)
@@ -141,7 +160,13 @@ class SemanticCache:
             )
 
         record_miss(namespace)
-        log.info("cache.miss", namespace=namespace)
+        log.info(
+            "cache.miss",
+            namespace=namespace,
+            best_score=best_score,
+            threshold=self._threshold,
+            embedding_model=self._embedder.model_id,
+        )
         return response
 
     def _sync_cached_call(
@@ -158,24 +183,40 @@ class SemanticCache:
 
         if kwargs.get("stream", False):
             record_stream_bypass()
-            log.info("cache.stream_bypass", namespace=namespace)
+            log.info(
+                "cache.stream_bypass",
+                namespace=namespace,
+                embedding_model=self._embedder.model_id,
+            )
             return fn(*args, **kwargs)
 
         try:
             prompt_text = self._extract_prompt(kwargs.get("messages", []))
             if prompt_text is None:
-                log.info("cache.no_user_message_bypass", namespace=namespace)
+                log.info(
+                    "cache.no_user_message_bypass",
+                    namespace=namespace,
+                    embedding_model=self._embedder.model_id,
+                )
                 return fn(*args, **kwargs)
             context_hash = hash_context(cache_context)
         except Exception as exc:
             record_cache_error("lookup")
-            log.error("cache.lookup_params_failed", error=str(exc))
+            log.error("cache.lookup_params_failed", error=str(exc), namespace=namespace)
             return fn(*args, **kwargs)
 
-        embedding, cached = self._sync_lookup(prompt_text, namespace, context_hash)
+        embedding, cached, best_score = self._sync_lookup(prompt_text, namespace, context_hash)
+        if best_score is not None:
+            record_similarity_score(best_score)
         if cached is not None:
             record_hit(namespace)
-            log.info("cache.hit", namespace=namespace)
+            log.info(
+                "cache.hit",
+                namespace=namespace,
+                best_score=best_score,
+                threshold=self._threshold,
+                embedding_model=self._embedder.model_id,
+            )
             return cached
 
         response = fn(*args, **kwargs)
@@ -189,20 +230,26 @@ class SemanticCache:
             )
 
         record_miss(namespace)
-        log.info("cache.miss", namespace=namespace)
+        log.info(
+            "cache.miss",
+            namespace=namespace,
+            best_score=best_score,
+            threshold=self._threshold,
+            embedding_model=self._embedder.model_id,
+        )
         return response
 
     async def _async_lookup(
         self, prompt_text: str, namespace: str, context_hash: str
-    ) -> tuple[list[float], Any | None]:
+    ) -> tuple[list[float], Any | None, float | None]:
         """Attempt cache lookup with timeout and fail-open on error."""
         try:
             with measure_embedding_latency():
                 embedding = self._embedder.embed(prompt_text)
         except Exception as exc:
             record_cache_error("embed")
-            log.error("cache.embed_failed", error=str(exc))
-            return [], None
+            log.error("cache.embed_failed", error=str(exc), namespace=namespace)
+            return [], None, None
         try:
             result = await asyncio.wait_for(
                 self._storage.asearch(
@@ -214,23 +261,26 @@ class SemanticCache:
                 ),
                 timeout=self._config.cache_timeout_seconds,
             )
-            return embedding, result.response if result is not None else None
+            if result is None:
+                return embedding, None, None
+            response = result.entry.response if result.entry is not None else None
+            return embedding, response, result.best_score
         except Exception as exc:
             record_cache_error("lookup")
-            log.error("cache.lookup_failed", error=str(exc))
-            return embedding, None
+            log.error("cache.lookup_failed", error=str(exc), namespace=namespace)
+            return embedding, None, None
 
     def _sync_lookup(
         self, prompt_text: str, namespace: str, context_hash: str
-    ) -> tuple[list[float], Any | None]:
+    ) -> tuple[list[float], Any | None, float | None]:
         """Sync cache lookup with fail-open on error."""
         try:
             with measure_embedding_latency():
                 embedding = self._embedder.embed(prompt_text)
         except Exception as exc:
             record_cache_error("embed")
-            log.error("cache.embed_failed", error=str(exc))
-            return [], None
+            log.error("cache.embed_failed", error=str(exc), namespace=namespace)
+            return [], None, None
         try:
             result = self._storage.search(
                 embedding=embedding,
@@ -239,11 +289,14 @@ class SemanticCache:
                 context_hash=context_hash,
                 threshold=self._threshold,
             )
-            return embedding, result.response if result is not None else None
+            if result is None:
+                return embedding, None, None
+            response = result.entry.response if result.entry is not None else None
+            return embedding, response, result.best_score
         except Exception as exc:
             record_cache_error("lookup")
-            log.error("cache.lookup_failed", error=str(exc))
-            return embedding, None
+            log.error("cache.lookup_failed", error=str(exc), namespace=namespace)
+            return embedding, None, None
 
     async def _async_store(
         self,

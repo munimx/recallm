@@ -17,7 +17,9 @@ def test_store_and_retrieve_by_exact_match(memory_storage: InMemoryStorage) -> N
         threshold=0.92,
     )
     assert result is not None
-    assert result.id == entry.id
+    assert result.entry is not None
+    assert result.entry.id == entry.id
+    assert isinstance(result.best_score, float)
 
 
 def test_search_returns_none_when_namespace_empty(memory_storage: InMemoryStorage) -> None:
@@ -40,7 +42,9 @@ def test_search_returns_none_when_context_hash_differs(memory_storage: InMemoryS
 def test_search_returns_none_below_threshold(memory_storage: InMemoryStorage) -> None:
     memory_storage.store(make_entry(embedding=[1.0, 0.0, 0.0]))
     result = memory_storage.search([0.0, 1.0, 0.0], "test", "test-model", "abc123", 0.5)
-    assert result is None
+    assert result is not None
+    assert result.entry is None
+    assert isinstance(result.best_score, float)
 
 
 def test_search_returns_best_match_above_threshold(memory_storage: InMemoryStorage) -> None:
@@ -51,7 +55,8 @@ def test_search_returns_best_match_above_threshold(memory_storage: InMemoryStora
 
     result = memory_storage.search([1.0, 0.0, 0.0], "test", "test-model", "abc123", 0.7)
     assert result is not None
-    assert result.prompt_text == "stronger"
+    assert result.entry is not None
+    assert result.entry.prompt_text == "stronger"
 
 
 def test_search_ignores_expired_entries(memory_storage: InMemoryStorage) -> None:
@@ -134,7 +139,8 @@ def test_embedding_model_id_filtering(memory_storage: InMemoryStorage) -> None:
     )
     result = memory_storage.search([1.0, 0.0, 0.0], "ns", "model-b", "ctx", 0.9)
     assert result is not None
-    assert result.embedding_model_id == "model-b"
+    assert result.entry is not None
+    assert result.entry.embedding_model_id == "model-b"
 
 
 @pytest.mark.asyncio
@@ -144,4 +150,5 @@ async def test_async_methods_do_not_use_thread_pool(memory_storage: InMemoryStor
         await memory_storage.astore(entry)
         result = await memory_storage.asearch([1.0, 0.0, 0.0], "ns", "test-model", "ctx", 0.9)
     assert result is not None
+    assert result.entry is not None
     to_thread.assert_not_called()

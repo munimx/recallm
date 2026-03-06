@@ -8,7 +8,7 @@ from typing import Any, cast
 import numpy as np
 
 from llm_semantic_cache.similarity import cosine_similarity
-from llm_semantic_cache.storage.base import CacheEntry, StorageBackend
+from llm_semantic_cache.storage.base import CacheEntry, SearchResult, StorageBackend
 
 _ENTRY_PREFIX = "llmsc:entry:"
 _NS_INDEX_PREFIX = "llmsc:ns:"
@@ -95,7 +95,7 @@ class RedisStorage(StorageBackend):
         embedding_model_id: str,
         context_hash: str,
         threshold: float,
-    ) -> CacheEntry | None:
+    ) -> SearchResult | None:
         sync_client = self._require_sync_client()
         ns_key = _ns_index_key(namespace)
         entry_ids = sync_client.smembers(ns_key)
@@ -149,14 +149,14 @@ class RedisStorage(StorageBackend):
         best_idx = int(np.argmax(scores))
         best_score = float(scores[best_idx])
         if best_score < threshold:
-            return None
+            return SearchResult(entry=None, best_score=best_score)
 
         winner_id = candidate_ids[best_idx]
         winner_data = sync_client.hgetall(_entry_key(winner_id))
         if not winner_data:
             sync_client.srem(ns_key, winner_id)
-            return None
-        return _deserialize_entry(winner_data)
+            return SearchResult(entry=None, best_score=best_score)
+        return SearchResult(entry=_deserialize_entry(winner_data), best_score=best_score)
 
     def invalidate_namespace(self, namespace: str) -> int:
         sync_client = self._require_sync_client()
@@ -213,7 +213,7 @@ class RedisStorage(StorageBackend):
         embedding_model_id: str,
         context_hash: str,
         threshold: float,
-    ) -> CacheEntry | None:
+    ) -> SearchResult | None:
         """Search for best matching entry in Redis with lazy tombstone cleanup."""
         ns_key = _ns_index_key(namespace)
         entry_ids = await self._client.smembers(ns_key)
@@ -269,13 +269,13 @@ class RedisStorage(StorageBackend):
         best_idx = int(np.argmax(scores))
         best_score = float(scores[best_idx])
         if best_score < threshold:
-            return None
+            return SearchResult(entry=None, best_score=best_score)
 
         winner_id = candidate_ids[best_idx]
         winner_data = await self._client.hgetall(_entry_key(winner_id))
         if not winner_data:
-            return None
-        return _deserialize_entry(winner_data)
+            return SearchResult(entry=None, best_score=best_score)
+        return SearchResult(entry=_deserialize_entry(winner_data), best_score=best_score)
 
     async def ainvalidate_namespace(self, namespace: str) -> int:
         """Delete all entries in a namespace atomically via pipeline."""
