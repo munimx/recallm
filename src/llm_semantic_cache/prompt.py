@@ -4,7 +4,7 @@ from __future__ import annotations
 from llm_semantic_cache.models import ChatMessage
 
 
-def extract_prompt_text(messages: list[ChatMessage] | list[dict]) -> str | None:
+def extract_prompt_text(messages: list[ChatMessage] | list[dict[str, str]]) -> str | None:
     """Extract the canonical prompt text from a list of chat messages.
 
     Accepts either a list of ChatMessage objects or a list of dicts with
