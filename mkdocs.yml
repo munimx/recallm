@@ -20,9 +20,7 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to dark mode
-  font:
-    text: Plus Jakarta Sans
-    code: JetBrains Mono
+  font: false
   features:
     - navigation.tabs
     - navigation.sections
