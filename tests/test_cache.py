@@ -194,6 +194,94 @@ def test_no_user_message_bypasses_cache(fake_embedder: Any) -> None:
     assert calls["count"] == 2
 
 
+def test_stream_bypass_logs_embedding_model(
+    fake_embedder: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = make_cache(fake_embedder)
+    events: list[tuple[str, dict[str, Any]]] = []
+
+    def capture_info(event: str, **kwargs: Any) -> None:
+        events.append((event, kwargs))
+
+    monkeypatch.setattr("llm_semantic_cache.cache.log.info", capture_info)
+
+    def create(**_: Any) -> dict[str, Any]:
+        return RESPONSE
+
+    wrapped = cache.wrap(create)
+    wrapped(messages=MESSAGES, cache_context={}, stream=True)
+
+    stream_event = next(e for e in events if e[0] == "cache.stream_bypass")
+    assert stream_event[1]["embedding_model"] == fake_embedder.model_id
+
+
+def test_no_user_message_bypass_logs_embedding_model(
+    fake_embedder: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = make_cache(fake_embedder)
+    events: list[tuple[str, dict[str, Any]]] = []
+    messages = [{"role": "system", "content": "You are helpful"}]
+
+    def capture_info(event: str, **kwargs: Any) -> None:
+        events.append((event, kwargs))
+
+    monkeypatch.setattr("llm_semantic_cache.cache.log.info", capture_info)
+
+    def create(**_: Any) -> dict[str, Any]:
+        return RESPONSE
+
+    wrapped = cache.wrap(create)
+    wrapped(messages=messages, cache_context={})
+
+    bypass_event = next(e for e in events if e[0] == "cache.no_user_message_bypass")
+    assert bypass_event[1]["embedding_model"] == fake_embedder.model_id
+
+
+def test_cache_hit_logs_score_threshold_model(
+    fake_embedder: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = make_cache(fake_embedder)
+    events: list[tuple[str, dict[str, Any]]] = []
+
+    def capture_info(event: str, **kwargs: Any) -> None:
+        events.append((event, kwargs))
+
+    monkeypatch.setattr("llm_semantic_cache.cache.log.info", capture_info)
+
+    def create(**_: Any) -> dict[str, Any]:
+        return RESPONSE
+
+    wrapped = cache.wrap(create)
+    wrapped(messages=MESSAGES, cache_context={})
+    wrapped(messages=MESSAGES, cache_context={})
+
+    hit_event = next(e for e in events if e[0] == "cache.hit")
+    assert isinstance(hit_event[1]["best_score"], float)
+    assert hit_event[1]["threshold"] == 0.85
+    assert hit_event[1]["embedding_model"] == fake_embedder.model_id
+
+
+def test_cache_miss_empty_store_logs_best_score_none(
+    fake_embedder: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = make_cache(fake_embedder)
+    events: list[tuple[str, dict[str, Any]]] = []
+
+    def capture_info(event: str, **kwargs: Any) -> None:
+        events.append((event, kwargs))
+
+    monkeypatch.setattr("llm_semantic_cache.cache.log.info", capture_info)
+
+    def create(**_: Any) -> dict[str, Any]:
+        return RESPONSE
+
+    wrapped = cache.wrap(create)
+    wrapped(messages=MESSAGES, cache_context={})
+
+    miss_event = next(e for e in events if e[0] == "cache.miss")
+    assert miss_event[1]["best_score"] is None
+
+
 def test_different_context_hash_is_cache_miss(fake_embedder: Any) -> None:
     cache = make_cache(fake_embedder)
     calls = {"count": 0}
