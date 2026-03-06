@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from llm_semantic_cache.storage.base import CacheEntry, StorageBackend
+from llm_semantic_cache.storage.base import CacheEntry, SearchResult, StorageBackend
 
 
 class InMemoryStorage(StorageBackend):
@@ -34,7 +34,7 @@ class InMemoryStorage(StorageBackend):
         embedding_model_id: str,
         context_hash: str,
         threshold: float,
-    ) -> CacheEntry | None:
+    ) -> SearchResult | None:
         """Find the best matching entry using numpy-vectorized cosine similarity.
 
         Filters candidates by namespace, embedding_model_id, context_hash,
@@ -75,10 +75,9 @@ class InMemoryStorage(StorageBackend):
 
         best_idx = int(np.argmax(scores))
         best_score = float(scores[best_idx])
-
         if best_score >= threshold:
-            return candidates[best_idx]
-        return None
+            return SearchResult(entry=candidates[best_idx], best_score=best_score)
+        return SearchResult(entry=None, best_score=best_score)
 
     def invalidate_namespace(self, namespace: str) -> int:
         """Delete all entries in a namespace. Returns count of deleted entries."""
@@ -107,7 +106,7 @@ class InMemoryStorage(StorageBackend):
         embedding_model_id: str,
         context_hash: str,
         threshold: float,
-    ) -> CacheEntry | None:
+    ) -> SearchResult | None:
         return self.search(embedding, namespace, embedding_model_id, context_hash, threshold)
 
     async def ainvalidate_namespace(self, namespace: str) -> int:

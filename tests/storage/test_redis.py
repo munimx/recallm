@@ -30,7 +30,8 @@ async def test_astore_and_asearch_returns_match(redis_storage):
     match = await redis_storage.asearch([1.0, 0.0], "test", "test-model", "abc123", 0.9)
 
     assert match is not None
-    assert match.id == entry.id
+    assert match.entry is not None
+    assert match.entry.id == entry.id
 
 
 @pytest.mark.asyncio
@@ -64,7 +65,8 @@ async def test_asearch_returns_none_below_threshold(redis_storage):
 
     match = await redis_storage.asearch([0.0, 1.0], "test", "test-model", "abc123", 0.5)
 
-    assert match is None
+    assert match is not None
+    assert match.entry is None
 
 
 @pytest.mark.asyncio
@@ -77,7 +79,8 @@ async def test_asearch_returns_best_match_above_threshold(redis_storage):
     match = await redis_storage.asearch([1.0, 0.0], "test", "test-model", "abc123", 0.7)
 
     assert match is not None
-    assert match.id == better.id
+    assert match.entry is not None
+    assert match.entry.id == better.id
 
 
 @pytest.mark.asyncio
@@ -90,7 +93,8 @@ async def test_asearch_pipelines_hgetall(redis_storage):
     match = await redis_storage.asearch([1.0, 0.0], "ns", "test-model", "abc123", 0.6)
 
     assert match is not None
-    assert match.id == better.id
+    assert match.entry is not None
+    assert match.entry.id == better.id
 
 
 @pytest.mark.asyncio
@@ -117,7 +121,8 @@ async def test_asearch_does_not_fetch_response_before_filtering(redis_storage):
         redis_storage._client.hgetall = original_hgetall
 
     assert match is not None
-    assert match.id == winner.id
+    assert match.entry is not None
+    assert match.entry.id == winner.id
     assert call_count == 1
 
 
@@ -211,7 +216,8 @@ def test_store_search_sync_with_sync_client():
     match = storage.search([1.0, 0.0], "ns", "test-model", "abc123", 0.9)
 
     assert match is not None
-    assert match.id == entry.id
+    assert match.entry is not None
+    assert match.entry.id == entry.id
 
 
 def test_sync_methods_raise_without_sync_client():

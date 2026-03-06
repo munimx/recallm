@@ -10,7 +10,7 @@ import pytest
 
 from llm_semantic_cache.cache import SemanticCache
 from llm_semantic_cache.config import CacheConfig
-from llm_semantic_cache.storage.base import CacheEntry
+from llm_semantic_cache.storage.base import CacheEntry, SearchResult
 from llm_semantic_cache.storage.memory import InMemoryStorage
 
 MESSAGES = [{"role": "user", "content": "What is Python?"}]
@@ -246,7 +246,7 @@ def test_sync_lookup_failure_fails_open(fake_embedder: Any) -> None:
             embedding_model_id: str,
             context_hash: str,
             threshold: float,
-        ) -> CacheEntry | None:
+        ) -> SearchResult | None:
             raise RuntimeError("search failed")
 
     calls = {"count": 0}
@@ -344,7 +344,7 @@ async def test_async_lookup_timeout_fails_open(fake_embedder: Any) -> None:
             embedding_model_id: str,
             context_hash: str,
             threshold: float,
-        ) -> CacheEntry | None:
+        ) -> SearchResult | None:
             await asyncio.sleep(0.05)
             return None
 

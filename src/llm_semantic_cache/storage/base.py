@@ -47,6 +47,27 @@ class CacheEntry:
         return (time.time() - self.created_at) > self.ttl
 
 
+@dataclass
+class SearchResult:
+    """Result of a similarity search with the computed score.
+
+    Only returned when similarity was actually computed (candidates existed
+    and matrix dot product was executed). None is returned from search()
+    when no candidates existed for any reason (empty namespace, all filtered
+    by embedding_model_id/context_hash/expiry).
+
+    best_score >= threshold means entry is set (cache hit).
+    best_score < threshold means entry is None (cache miss, but near-miss recorded).
+    """
+
+    entry: CacheEntry | None
+    """The best matching entry, or None if best_score < threshold."""
+
+    best_score: float
+    """The actual cosine similarity (dot product) of the best candidate.
+    Always a real computed value, never a synthetic 0.0."""
+
+
 class StorageBackend(ABC):
     """Abstract base class for SemanticCache storage backends.
 
@@ -69,7 +90,7 @@ class StorageBackend(ABC):
         embedding_model_id: str,
         context_hash: str,
         threshold: float,
-    ) -> CacheEntry | None:
+    ) -> SearchResult | None:
         """Find the best matching cache entry above the similarity threshold.
 
         Only considers entries that match:
@@ -78,7 +99,9 @@ class StorageBackend(ABC):
         - context_hash (exact)
         - cosine similarity >= threshold
 
-        Returns the highest-similarity match, or None if no match is found.
+        Returns SearchResult with the best match and score when at least one
+        candidate was scored. Returns None when no candidates existed after
+        filtering.
         """
 
     @abstractmethod
@@ -111,7 +134,7 @@ class StorageBackend(ABC):
         embedding_model_id: str,
         context_hash: str,
         threshold: float,
-    ) -> CacheEntry | None:
+    ) -> SearchResult | None:
         """Async version of search()."""
         import asyncio
 
