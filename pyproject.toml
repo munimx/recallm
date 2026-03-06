@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.backends.legacy:build"
 
 [project]
-name = "llm-semantic-cache"
+name = "recallm"
 version = "0.1.0"
-description = "Semantic caching for OpenAI-compatible LLM APIs"
+description = "Semantic caching for LLMs. Ask once, recall forever."
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.0",
