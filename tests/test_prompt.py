@@ -64,3 +64,11 @@ def test_extract_prompt_skips_empty_user_then_finds_earlier() -> None:
         {"role": "user", "content": ""},
     ]
     assert extract_prompt_text(messages) == "real"
+
+
+def test_extract_prompt_skips_non_user_messages_in_reverse() -> None:
+    messages = [{"role": "assistant", "content": f"msg-{i}"} for i in range(25)]
+    messages.extend({"role": "system", "content": f"rule-{i}"} for i in range(25))
+    messages.append({"role": "user", "content": "final question"})
+
+    assert extract_prompt_text(messages) == "final question"

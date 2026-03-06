@@ -43,6 +43,10 @@ class SemanticCache:
         # Warm up the embedding model eagerly to prevent cold-start cache bypass.
         # The lazy load on first use can take seconds; we absorb this cost at init time.
         self._embedder.embed("warmup")
+        # Note: This blocks the calling thread while the ONNX model loads (1–10s on
+        # first run). In async frameworks, use async_warmup() instead — construct
+        # SemanticCache before the event loop starts, or call
+        # await asyncio.to_thread(lambda: SemanticCache(...)) from async code.
 
     def wrap(
         self,
@@ -62,6 +66,19 @@ class SemanticCache:
     async def ainvalidate_namespace(self, namespace: str) -> int:
         """Async version of invalidate_namespace()."""
         return await self._storage.ainvalidate_namespace(namespace)
+
+    async def async_warmup(self) -> None:
+        """Warm up the embedding model without blocking the event loop.
+
+        Use this in async frameworks (FastAPI lifespan, etc.) instead of
+        relying on the blocking warmup in __init__:
+
+            @asynccontextmanager
+            async def lifespan(app):
+                await cache.async_warmup()
+                yield
+        """
+        await asyncio.to_thread(self._embedder.embed, "warmup")
 
     def _make_async_wrapper(self, fn: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(fn)
@@ -103,8 +120,8 @@ class SemanticCache:
                 return await fn(*args, **kwargs)
             context_hash = hash_context(cache_context)
         except Exception as exc:
-            record_cache_error("params")
-            log.error("cache.params_failed", error=str(exc))
+            record_cache_error("lookup")
+            log.error("cache.lookup_params_failed", error=str(exc))
             return await fn(*args, **kwargs)
 
         embedding, cached = await self._async_lookup(prompt_text, namespace, context_hash)
@@ -114,13 +131,14 @@ class SemanticCache:
             return cached
 
         response = await fn(*args, **kwargs)
-        await self._async_store(
-            prompt_text,
-            embedding,
-            context_hash,
-            namespace,
-            response,
-        )
+        if embedding:
+            await self._async_store(
+                prompt_text,
+                embedding,
+                context_hash,
+                namespace,
+                response,
+            )
 
         record_miss(namespace)
         log.info("cache.miss", namespace=namespace)
@@ -150,8 +168,8 @@ class SemanticCache:
                 return fn(*args, **kwargs)
             context_hash = hash_context(cache_context)
         except Exception as exc:
-            record_cache_error("params")
-            log.error("cache.params_failed", error=str(exc))
+            record_cache_error("lookup")
+            log.error("cache.lookup_params_failed", error=str(exc))
             return fn(*args, **kwargs)
 
         embedding, cached = self._sync_lookup(prompt_text, namespace, context_hash)
@@ -161,13 +179,14 @@ class SemanticCache:
             return cached
 
         response = fn(*args, **kwargs)
-        self._sync_store(
-            prompt_text,
-            embedding,
-            context_hash,
-            namespace,
-            response,
-        )
+        if embedding:
+            self._sync_store(
+                prompt_text,
+                embedding,
+                context_hash,
+                namespace,
+                response,
+            )
 
         record_miss(namespace)
         log.info("cache.miss", namespace=namespace)
@@ -181,8 +200,8 @@ class SemanticCache:
             with measure_embedding_latency():
                 embedding = self._embedder.embed(prompt_text)
         except Exception as exc:
-            record_cache_error("lookup")
-            log.error("cache.lookup_failed", error=str(exc))
+            record_cache_error("embed")
+            log.error("cache.embed_failed", error=str(exc))
             return [], None
         try:
             result = await asyncio.wait_for(
@@ -209,8 +228,8 @@ class SemanticCache:
             with measure_embedding_latency():
                 embedding = self._embedder.embed(prompt_text)
         except Exception as exc:
-            record_cache_error("lookup")
-            log.error("cache.lookup_failed", error=str(exc))
+            record_cache_error("embed")
+            log.error("cache.embed_failed", error=str(exc))
             return [], None
         try:
             result = self._storage.search(
