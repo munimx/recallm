@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "recallm"
-version = "0.1.0"
+version = "0.2.0"
 description = "Semantic caching for LLMs. Ask once, recall forever."
 readme = "README.md"
 requires-python = ">=3.11"
