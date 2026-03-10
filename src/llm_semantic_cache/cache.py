@@ -351,7 +351,7 @@ class SemanticCache:
                 return embedding, None, None
             response = result.entry.response if result.entry is not None else None
             return embedding, response, result.best_score
-        except asyncio.TimeoutError:
+        except TimeoutError:
             elapsed_ms = int((time.perf_counter() - op_start) * 1000)
             timeout_ms = int(self._config.cache_timeout_seconds * 1000)
             record_cache_error("lookup")

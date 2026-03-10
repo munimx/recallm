@@ -1,9 +1,10 @@
+import threading
 import time
 from unittest.mock import patch
 
 import pytest
 
-from llm_semantic_cache.storage.memory import InMemoryStorage
+from llm_semantic_cache.storage.memory import InMemoryStorage, ThreadSafeInMemoryStorage
 from tests.conftest import make_entry
 
 
@@ -153,11 +154,6 @@ async def test_async_methods_do_not_use_thread_pool(memory_storage: InMemoryStor
     assert result is not None
     assert result.entry is not None
     to_thread.assert_not_called()
-
-
-import threading
-
-from llm_semantic_cache.storage.memory import ThreadSafeInMemoryStorage
 
 
 def test_thread_safe_storage_basic_store_and_search() -> None:

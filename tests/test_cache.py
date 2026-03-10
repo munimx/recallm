@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import structlog
-import structlog.testing
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+import structlog
+import structlog.testing
 
 from llm_semantic_cache.cache import CacheStats, SemanticCache
 from llm_semantic_cache.config import CacheConfig
