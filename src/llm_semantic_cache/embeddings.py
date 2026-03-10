@@ -102,7 +102,7 @@ class SentenceTransformerEmbedder:
 
     def _load_model(self) -> object:
         try:
-            from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
+            from sentence_transformers import SentenceTransformer
         except ImportError as exc:
             raise ImportError(
                 "sentence-transformers is required for SentenceTransformerEmbedder. "

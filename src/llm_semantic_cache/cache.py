@@ -221,8 +221,9 @@ class SemanticCache:
         if best_score is not None:
             record_similarity_score(best_score)
         if cached is not None:
+            assert best_score is not None  # cached is only set when search returns a score
             self._hits += 1
-            self._similarity_sum += best_score  # best_score is not None when cached is not None
+            self._similarity_sum += best_score
             self._similarity_hit_count += 1
             record_hit(namespace)
             log.info(
@@ -290,8 +291,9 @@ class SemanticCache:
         if best_score is not None:
             record_similarity_score(best_score)
         if cached is not None:
+            assert best_score is not None  # cached is only set when search returns a score
             self._hits += 1
-            self._similarity_sum += best_score  # best_score is not None when cached is not None
+            self._similarity_sum += best_score
             self._similarity_hit_count += 1
             record_hit(namespace)
             log.info(
